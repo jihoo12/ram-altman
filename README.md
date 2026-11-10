@@ -1,6 +1,6 @@
 # Ram-Altman
 
-**A bash script that writes to Sam Altman once a day to report the RAM he missed.**
+**A Rust program that writes to Sam Altman once a day to report the RAM he missed.**
 
 Read the sample emails at **[ram-altman.lol](https://ram-altman.lol)**, no install needed.
 
@@ -8,7 +8,7 @@ Read the sample emails at **[ram-altman.lol](https://ram-altman.lol)**, no insta
 ![Global DRAM allocation: quite terrible](https://img.shields.io/badge/global%20DRAM%20allocation-quite%20terrible-red)
 ![Utilization: maybe 5%](https://img.shields.io/badge/utilization-maybe%205%25-orange)
 ![Emails: 1 per day](https://img.shields.io/badge/emails-1%20per%20day-blue)
-![Written in Bash, not Electron](https://img.shields.io/badge/written%20in-bash%2C%20not%20electron-brightgreen)
+![Written in Rust, not Electron](https://img.shields.io/badge/written%20in-rust%2C%20not%20electron-brightgreen)
 
 There is RAM in your computer. Right now. Just sitting there, in a *personal* computer, being personal.
 
@@ -22,7 +22,9 @@ That RAM, he added, is ["being used maybe 5% of the time"](https://www.xda-devel
 
 Which raised an obvious question for a certain kind of person: *surely someone should be monitoring this?*
 
-So we wrote a script. If your machine has more than 10% of its RAM available, it sends one email a day to let Sam know. It seemed only fair. He can't fix the problem if nobody tells him where the RAM is.
+So we wrote a program. If your machine has more than 10% of its RAM available, it sends one email a day to let Sam know. It seemed only fair. He can't fix the problem if nobody tells him where the RAM is.
+
+The original was a bash script. This is the rewrite. The jokes are identical; the memory accounting is now the compiler's problem.
 
 ## Features
 
@@ -31,8 +33,8 @@ So we wrote a script. If your machine has more than 10% of its RAM available, it
 - Sends at most one email per day, because we're hoarders, not animals
 - Rotates 8 subject lines, 10 messages and 6 sign-offs, so the joke gets old at a carefully managed pace
 - Logs every sample to CSV for when the auditors arrive
-- Ships with 14 tests, more than the DRAM market has had sensible outcomes
-- Is written in bash, as an Electron version would have solved the problem by using all the RAM
+- Ships with 9 tests, more than the DRAM market has had sensible outcomes
+- Is written in Rust, so the only RAM it wastes is the half a megabyte it uses to complain about the other 32 GiB
 
 ## A sample of today's correspondence
 
@@ -67,30 +69,36 @@ Every sysadmin has spent years explaining that [Linux didn't eat your RAM](https
 
 Strictly speaking, the page cache is doing useful work, so counting it as available is a generous concession to the other side. Think of it as a plea bargain.
 
-On kernels older than 3.14, which have no `MemAvailable`, the script estimates it from free memory plus reclaimable cache. If you're on one of those, your RAM may be safe. Nobody's coming for that.
+On kernels older than 3.14, which have no `MemAvailable`, the program estimates it from free memory plus reclaimable cache. If you're on one of those, your RAM may be safe. Nobody's coming for that.
 
 ## Installation
 
-You'll need Linux, bash, and a working `sendmail`, `msmtp` or `mail` command. Your RAM is assumed.
+You'll need Linux, a Rust toolchain (1.74 or newer), and a working `sendmail`, `msmtp` or `mail` command. Your RAM is assumed.
 
 ```bash
-git clone https://github.com/IainKay/ram-altman.git
+git clone https://github.com/jihoo12/ram-altman.git
 cd ram-altman
-chmod +x ram-altman.sh test-ram-altman.sh
+cargo build --release
 
-./ram-altman.sh --status    # see the evidence against you
-./ram-altman.sh --dry-run   # preview an email without sending it
+./target/release/ram-altman --status    # see the evidence against you
+./target/release/ram-altman --dry-run   # preview an email without sending it
 ```
 
 Or run it straight from the repository with [Nix](https://nixos.org/) (flakes enabled):
 
 ```bash
-nix run github:IainKay/ram-altman -- --status
-nix run github:IainKay/ram-altman -- --dry-run
+nix run github:jihoo12/ram-altman -- --status
+nix run github:jihoo12/ram-altman -- --dry-run
 ```
 
-The flake supplies `bash`, `awk`, `coreutils` and `util-linux`. You still need a
-`sendmail`, `msmtp` or `mail` command on your `PATH` to send for real.
+The flake builds the program with the pinned Rust toolchain. You still need a `sendmail`, `msmtp` or `mail` command on your `PATH` to send for real.
+
+Developers can get the same toolchain with `nix develop`:
+
+```bash
+nix develop -c cargo test
+nix develop -c cargo build --release
+```
 
 Example output, from a simulated machine that has confessed to everything:
 
@@ -109,7 +117,7 @@ RAM_ALTMAN_TO=recipient@example.com
 RAM_ALTMAN_FROM=you@example.com
 RAM_ALTMAN_FROM_NAME=Your Name
 
-*/5 * * * * /path/to/ram-altman.sh
+*/5 * * * * /path/to/ram-altman/target/release/ram-altman
 ```
 
 It samples every five minutes and emails at most once a day. If a send fails, it tries again on the next run, because this message matters.
@@ -156,6 +164,9 @@ The memory accounting is. The correspondence isn't.
 **Does it work on macOS?**
 No, it reads `/proc/meminfo`. On the other hand, your RAM is probably soldered down, which makes you the hardest target in the global allocation programme.
 
+**Why rewrite it in Rust?**
+The bash version was the joke. This is the punchline. Also, a binary that complains about unallocated memory should not itself need an interpreter.
+
 **Why is the threshold 10%?**
 Below that, your machine has suffered enough.
 
@@ -163,7 +174,7 @@ Below that, your machine has suffered enough.
 Briefly. It's then returned to the global pool, which is more than can be said for the rest of us.
 
 **Can I run the tests without emailing anyone?**
-Yes. `./test-ram-altman.sh` uses simulated memory and a fake `sendmail`. No inboxes are harmed.
+Yes. `cargo test` uses simulated memory and a fake `sendmail`. No inboxes are harmed.
 
 **Can I see it without installing anything?**
 Yes. [ram-altman.lol](https://ram-altman.lol) cycles through the real emails, with sample figures.
@@ -181,7 +192,7 @@ He [followed up](https://www.gadgetreview.com/sam-altman-says-he-wants-you-to-ha
 
 The original remarks [came up in a discussion of running AI models locally](https://www.engadget.com/2303266/sam-altman-says-its-terrible-dram-computer/), and the utilization argument is a real one: servers really are busier than your desktop. We just think it's funnier to reply with cron.
 
-Besides, if he wants you to have so much RAM, then this script isn't a complaint at all. It's a daily progress report.
+Besides, if he wants you to have so much RAM, then this program isn't a complaint at all. It's a daily progress report.
 
 ## License
 

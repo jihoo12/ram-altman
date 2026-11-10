@@ -6,7 +6,7 @@
   outputs =
     { self, nixpkgs }:
     let
-      # The script reads /proc/meminfo, so it only runs on Linux.
+      # The program reads /proc/meminfo, so it only runs on Linux.
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -17,36 +17,13 @@
 
       mkRamAltman =
         pkgs:
-        pkgs.stdenvNoCC.mkDerivation {
+        pkgs.rustPlatform.buildRustPackage {
           pname = "ram-altman";
-          version = "unstable";
+          version = "0.1.0";
 
           src = ./.;
 
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          dontConfigure = true;
-          dontBuild = true;
-
-          installPhase = ''
-            runHook preInstall
-
-            install -Dm755 ram-altman.sh "$out/bin/ram-altman"
-
-            # The script calls awk, coreutils and flock. Keep the caller's PATH
-            # too, so sendmail/msmtp/mail can still be found.
-            wrapProgram "$out/bin/ram-altman" \
-              --prefix PATH : ${
-                pkgs.lib.makeBinPath [
-                  pkgs.bash
-                  pkgs.coreutils
-                  pkgs.gawk
-                  pkgs.util-linux
-                ]
-              }
-
-            runHook postInstall
-          '';
+          cargoLock.lockFile = ./Cargo.lock;
 
           meta = with pkgs.lib; {
             description = "Track RAM usage and tell Sam Altman when this PC has RAM to spare";
@@ -82,27 +59,24 @@
         };
       });
 
-      checks = forAllSystems (pkgs: {
-        ram-altman = pkgs.runCommand "ram-altman-tests" {
-          nativeBuildInputs = [
-            pkgs.bash
-            pkgs.coreutils
-            pkgs.gawk
-            pkgs.util-linux
+      devShells = forAllSystems (pkgs: {
+        default = pkgs.mkShell {
+          packages = with pkgs; [
+            cargo
+            rustc
+            clippy
+            rustfmt
+            rust-analyzer
           ];
-        } ''
-          cp ${./ram-altman.sh} ram-altman.sh
-          cp ${./test-ram-altman.sh} test-ram-altman.sh
 
-          # There is no /usr/bin/env in the build sandbox, and the test writes
-          # its fake sendmail with a #!/usr/bin/env bash shebang.
-          substituteInPlace ram-altman.sh test-ram-altman.sh \
-            --replace-fail '#!/usr/bin/env bash' '#!${pkgs.bash}/bin/bash'
+          env.RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+        };
+      });
 
-          chmod +x ram-altman.sh test-ram-altman.sh
-          bash test-ram-altman.sh
-          touch "$out"
-        '';
+      checks = forAllSystems (pkgs: {
+        # Building the package also runs `cargo test` against simulated memory
+        # and a fake sendmail, so the checks need no inbox and no network.
+        ram-altman = mkRamAltman pkgs;
       });
     };
 }

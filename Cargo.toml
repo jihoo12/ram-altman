@@ -1,0 +1,16 @@
+[package]
+name = "ram-altman"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Track RAM usage and, at most once a day, tell Sam Altman when this PC has RAM to spare"
+license = "Unlicense"
+repository = "https://github.com/jihoo12/ram-altman"
+
+[dependencies]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
